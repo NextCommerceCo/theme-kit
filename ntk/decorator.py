@@ -1,6 +1,7 @@
 import functools
 import logging
-import sys
+
+from ntk.exceptions import NTKAuthError, NTKNotFoundError
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)s %(message)s',
@@ -38,12 +39,11 @@ def check_error(error_format='{error_default} -> {error_msg}', response_json=Tru
             response = func(self, *func_args, **func_kwargs)
 
             if response.status_code == 401:
-                logging.error(f'Invalid API key for {self.store}.')
-                sys.exit(1)
+                raise NTKAuthError(f'Invalid API key for {self.store}.')
 
             if response.status_code == 404:
-                logging.error(f'Theme or template not found for {self.store}.')
-                sys.exit(1)
+                raise NTKNotFoundError(
+                    f'Not found: {response.url} — check the store URL and theme id.')
 
             error_default = f'{func.__name__.capitalize().replace("_", " ")} of {self.store} failed.'
             error_msg = ""

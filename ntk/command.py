@@ -12,6 +12,7 @@ from ntk.conf import (
     SASS_EXTENSIONS,
 )
 from ntk.decorator import parser_config
+from ntk.exceptions import NTKError
 from ntk.gateway import Gateway
 from ntk.utils import get_template_name, progress_bar
 
@@ -49,12 +50,16 @@ class Command:
             if not pathfile.endswith(valid_extensions):
                 continue
             template_name = get_template_name(pathfile)
-            if event_type in [Change.added, Change.modified]:
-                logging.info(f'[{self.config.env}] {event_type.name.title()} {template_name}')
-                self._push_templates([template_name], compile_sass=True)
-            elif event_type == Change.deleted:
-                logging.info(f'[{self.config.env}] {event_type.name.title()} {template_name}')
-                self._delete_templates([template_name])
+            try:
+                if event_type in [Change.added, Change.modified]:
+                    logging.info(f'[{self.config.env}] {event_type.name.title()} {template_name}')
+                    self._push_templates([template_name], compile_sass=True)
+                elif event_type == Change.deleted:
+                    logging.info(f'[{self.config.env}] {event_type.name.title()} {template_name}')
+                    self._delete_templates([template_name])
+            except NTKError as error:
+                # Keep watching on a transient failure instead of killing the watcher.
+                logging.error(f'[{self.config.env}] {error}')
 
     def _push_templates(self, template_names, compile_sass=False):
         template_names = self._get_accept_files(template_names)

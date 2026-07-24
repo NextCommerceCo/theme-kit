@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 import logging
+import sys
 
 from requests.exceptions import HTTPError
 
+from ntk.exceptions import NTKError
 from ntk.ntk_parser import Parser
 
 logging.basicConfig(
@@ -19,6 +21,11 @@ def main():
         args.func(args)
     except AttributeError:
         print('Use ntk -h or --help to see available commands')
+    except NTKError as e:
+        # print new line for support error on process progress bar
+        print()
+        logging.error(e)
+        sys.exit(1)
     except (TypeError, HTTPError) as e:
         # print new line for support error on process progress bar
         print()

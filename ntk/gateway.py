@@ -1,7 +1,20 @@
+import time
 import requests
 from urllib.parse import urljoin
 
 from ntk.decorator import check_error
+from ntk.exceptions import NTKConnectionError
+
+MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 1
+
+# Transport-level failures that are worth retrying rather than surfacing as a raw stack trace.
+TRANSIENT_EXCEPTIONS = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+    requests.exceptions.SSLError,
+)
 
 
 class Gateway:
@@ -14,13 +27,21 @@ class Gateway:
         if apikey:
             headers = {'Authorization': f'Bearer {apikey}'}
 
-        try:
-            response = requests.request(request_type, url, headers=headers, data=payload, files=files)
-        except requests.exceptions.ConnectionError:
-            return self._request(request_type, url, apikey, payload, files)
-        if response.status_code == 429 and "throttled" in response.content.decode():
-            return self._request(request_type, url, apikey, payload, files)
-        return response
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = requests.request(request_type, url, headers=headers, data=payload, files=files)
+            except TRANSIENT_EXCEPTIONS:
+                if attempt == MAX_RETRIES - 1:
+                    raise NTKConnectionError(f'Unable to reach {self.store} after {MAX_RETRIES} attempts.')
+                time.sleep(RETRY_BACKOFF_SECONDS * (2 ** attempt))
+                continue
+
+            throttled = response.status_code == 429 and "throttled" in response.content.decode()
+            if throttled and attempt < MAX_RETRIES - 1:
+                time.sleep(RETRY_BACKOFF_SECONDS * (2 ** attempt))
+                continue
+
+            return response
 
     @check_error(error_format='Missing Themes in {store}')
     def get_themes(self):

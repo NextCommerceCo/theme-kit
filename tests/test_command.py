@@ -487,6 +487,21 @@ class TestCommand(unittest.TestCase):
         )
         self.assertIn(expected_call_added, self.mock_gateway.mock_calls)
 
+    @patch("ntk.command.Command._push_templates", autospec=True)
+    def test_watch_logs_and_continues_when_push_raises_ntk_error(self, mock_push_templates):
+        """A transient NTKError during watch should be logged, not kill the watcher."""
+        from ntk.exceptions import NTKAuthError
+        mock_push_templates.side_effect = NTKAuthError('Invalid API key for http://development.com.')
+        self.command.config.parser_config(self.parser)
+        changes = [
+            (Change.modified, './templates/index.html'),
+        ]
+        # Should not raise — the error is caught inside _handle_files_change.
+        with self.assertLogs(level='ERROR') as log:
+            self.command._handle_files_change(changes)
+        self.assertTrue(
+            any('Invalid API key for http://development.com.' in line for line in log.output))
+
     @patch("ntk.command.Command._get_accept_files", autospec=True)
     @patch("ntk.command.Command._compile_sass", autospec=True)
     def test_watch_command_with_sass_directory_should_call_compile_sass(

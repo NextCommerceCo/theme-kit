@@ -1,7 +1,10 @@
 import unittest
 from unittest.mock import call, MagicMock, patch
 
-from ntk.gateway import Gateway
+import requests
+
+from ntk.exceptions import NTKAuthError, NTKConnectionError, NTKNotFoundError
+from ntk.gateway import Gateway, MAX_RETRIES
 
 
 class TestGateway(unittest.TestCase):
@@ -42,8 +45,9 @@ class TestGateway(unittest.TestCase):
         ]
         assert mock_request.mock_calls == expected_calls
 
+    @patch('ntk.gateway.time.sleep', autospec=True)
     @patch('ntk.gateway.requests.request', autospec=True)
-    def test_request_with_rate_limit_should_retry(self, mock_request):
+    def test_request_with_rate_limit_should_retry(self, mock_request, mock_sleep):
         mock_response_429 = MagicMock()
         mock_response_429.status_code = 429
         mock_response_429.content.decode.return_value = "throttled"
@@ -81,6 +85,66 @@ class TestGateway(unittest.TestCase):
                 }, files=files)
         ]
         assert mock_request.mock_calls == expected_calls
+
+    @patch('ntk.gateway.time.sleep', autospec=True)
+    @patch('ntk.gateway.requests.request', autospec=True)
+    def test_request_rate_limit_gives_up_after_max_retries(self, mock_request, mock_sleep):
+        mock_response_429 = MagicMock()
+        mock_response_429.status_code = 429
+        mock_response_429.content.decode.return_value = "throttled"
+
+        mock_request.return_value = mock_response_429
+
+        response = self.gateway._request('GET', 'http://simple.com/api/admin/themes/', apikey=self.apikey)
+
+        assert mock_request.call_count == MAX_RETRIES
+        assert response is mock_response_429
+
+    @patch('ntk.gateway.time.sleep', autospec=True)
+    @patch('ntk.gateway.requests.request', autospec=True)
+    def test_request_retries_transient_error_then_succeeds(self, mock_request, mock_sleep):
+        mock_response_200 = MagicMock()
+        mock_response_200.status_code = 200
+
+        mock_request.side_effect = [requests.exceptions.ConnectionError(), mock_response_200]
+
+        response = self.gateway._request('GET', 'http://simple.com/api/admin/themes/', apikey=self.apikey)
+
+        assert mock_request.call_count == 2
+        assert response is mock_response_200
+
+    @patch('ntk.gateway.time.sleep', autospec=True)
+    @patch('ntk.gateway.requests.request', autospec=True)
+    def test_request_raises_after_persistent_transient_error(self, mock_request, mock_sleep):
+        # A Timeout is one of the broadened transient exceptions that should be retried, not surfaced raw.
+        mock_request.side_effect = requests.exceptions.Timeout()
+
+        with self.assertRaises(NTKConnectionError):
+            self.gateway._request('GET', 'http://simple.com/api/admin/themes/', apikey=self.apikey)
+
+        assert mock_request.call_count == MAX_RETRIES
+
+    #####
+    # 401 / 404 handling (check_error decorator)
+    #####
+    @patch('ntk.gateway.requests.request', autospec=True)
+    def test_request_401_raises_auth_error(self, mock_request):
+        mock_request.return_value.status_code = 401
+
+        with self.assertRaises(NTKAuthError) as error:
+            self.gateway.get_themes()
+
+        self.assertEqual(str(error.exception), 'Invalid API key for http://simple.com.')
+
+    @patch('ntk.gateway.requests.request', autospec=True)
+    def test_request_404_raises_not_found_error_with_url(self, mock_request):
+        mock_request.return_value.status_code = 404
+        mock_request.return_value.url = 'http://simple.com/api/admin/themes/6/templates/'
+
+        with self.assertRaises(NTKNotFoundError) as error:
+            self.gateway.get_templates(theme_id=6)
+
+        self.assertIn('http://simple.com/api/admin/themes/6/templates/', str(error.exception))
 
     #####
     # get_themes
