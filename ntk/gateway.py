@@ -14,7 +14,10 @@ class Gateway:
         if apikey:
             headers = {'Authorization': f'Bearer {apikey}'}
 
-        response = requests.request(request_type, url, headers=headers, data=payload, files=files)
+        try:
+            response = requests.request(request_type, url, headers=headers, data=payload, files=files)
+        except requests.exceptions.ConnectionError:
+            return self._request(request_type, url, apikey, payload, files)
         if response.status_code == 429 and "throttled" in response.content.decode():
             return self._request(request_type, url, apikey, payload, files)
         return response
