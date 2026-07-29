@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 from ntk.command import Command
 from ntk.conf import Config
+from ntk.exceptions import NTKError
 from ntk.ntk_parser import Parser
 from ntk.output import Output
 from ntk.utils import get_template_name, progress_bar
@@ -179,11 +180,66 @@ class TestToolingContract(unittest.TestCase):
                     viewports='desktop,mobile', settle_timeout=1234,
                 )
                 result = command.capture(parser)
+                parser.viewports = 'tablet'
+                with self.assertRaises(TypeError):
+                    command.capture(parser)
 
         self.assertTrue(result['ok'])
         self.assertEqual([page.viewport['width'] for page in pages], [1440, 390])
         self.assertTrue(all('preview_theme=42' in page.goto_calls[0][0] for page in pages))
         self.assertTrue(all(page.goto_calls[0][1]['timeout'] == 1234 for page in pages))
+
+    @patch('ntk.command.Config.read_config')
+    def test_optional_sass_failures_are_actionable(self, _read_config):
+        command = Command()
+        with patch('ntk.command.sass', None):
+            with patch('ntk.command.importlib.import_module', side_effect=ImportError):
+                with self.assertRaises(NTKError):
+                    command._compile_sass()
+        compiler = MagicMock()
+        compiler.compile.side_effect = RuntimeError('compile failed')
+        with patch('ntk.command.sass', compiler):
+            with self.assertRaises(NTKError):
+                command._compile_sass()
+
+    @patch('ntk.command.Gateway')
+    @patch('ntk.command.Config.read_config')
+    def test_transfer_failures_are_returned_per_file(self, _read_config, gateway):
+        command = Command()
+        command.output.quiet = True
+        response = gateway.return_value.create_or_update_template.return_value
+        response.ok = False
+        response.status_code = 500
+        with tempfile.TemporaryDirectory() as directory:
+            old_directory = os.getcwd()
+            try:
+                os.chdir(directory)
+                os.makedirs('templates')
+                with open('templates/index.html', 'w', encoding='utf-8') as output_file:
+                    output_file.write('ok')
+                command._get_accept_files = MagicMock(return_value=[os.path.abspath('templates/index.html')])
+                pushed = command._push_templates(['templates/index.html'])
+            finally:
+                os.chdir(old_directory)
+        self.assertEqual(pushed[0]['status'], 'failed')
+
+        delete_response = gateway.return_value.delete_template.return_value
+        delete_response.ok = False
+        delete_response.status_code = 503
+        deleted = command._delete_templates(['templates/index.html'])
+        self.assertEqual(deleted[0]['status'], 'failed')
+
+    @patch('ntk.command.Config.read_config')
+    def test_capture_without_optional_dependency_is_actionable(self, _read_config):
+        command = Command()
+        parser = SimpleNamespace(
+            env='development', apikey=None, store='store.example.com', theme_id=42,
+            sass_output_style=None, json=False, quiet=True, no_progress=True,
+            url='/', output='qa-output', viewports='desktop', settle_timeout=1000,
+        )
+        with patch.dict('sys.modules', {'playwright.sync_api': None}):
+            with self.assertRaises(NTKError):
+                command.capture(parser)
 
     @patch('ntk.command.Gateway')
     @patch('ntk.command.Config.read_config')

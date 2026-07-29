@@ -35,6 +35,5 @@ class TestMain(unittest.TestCase):
         self.assertEqual(payload['command'], 'validate')
         self.assertEqual(payload['error']['type'], 'TypeError')
 
-
 if __name__ == '__main__':
     unittest.main()
