@@ -328,36 +328,39 @@ class Command:
             raise TypeError(f'Unknown viewport(s): {", ".join(unknown)}')
         os.makedirs(parser.output, exist_ok=True)
         results = []
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
-            try:
-                for name in requested_viewports:
-                    viewport = viewports[name]
-                    page = browser.new_page(viewport=viewport)
-                    page.goto(capture_url, wait_until='networkidle', timeout=parser.settle_timeout)
-                    page.evaluate("document.fonts && document.fonts.ready")
-                    page.evaluate("""
-                        async () => {
-                          for (let y = 0; y < document.body.scrollHeight; y += window.innerHeight) {
-                            window.scrollTo(0, y);
-                            await new Promise(resolve => setTimeout(resolve, 50));
-                          }
-                          window.scrollTo(0, 0);
-                        }
-                    """)
-                    page.wait_for_function(
-                        "[...document.images].every(image => image.complete)", timeout=parser.settle_timeout
-                    )
-                    output_path = os.path.abspath(os.path.join(parser.output, f'{name}.png'))
-                    page.screenshot(path=output_path, full_page=True)
-                    results.append({
-                        'viewport': name,
-                        'width': viewport['width'],
-                        'height': viewport['height'],
-                        'path': output_path,
-                        'status': 'captured',
-                    })
-                    page.close()
-            finally:
-                browser.close()
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                try:
+                    for name in requested_viewports:
+                        viewport = viewports[name]
+                        page = browser.new_page(viewport=viewport)
+                        page.goto(capture_url, wait_until='networkidle', timeout=parser.settle_timeout)
+                        page.evaluate("document.fonts && document.fonts.ready")
+                        page.evaluate("""
+                            async () => {
+                              for (let y = 0; y < document.body.scrollHeight; y += window.innerHeight) {
+                                window.scrollTo(0, y);
+                                await new Promise(resolve => setTimeout(resolve, 50));
+                              }
+                              window.scrollTo(0, 0);
+                            }
+                        """)
+                        page.wait_for_function(
+                            "[...document.images].every(image => image.complete)", timeout=parser.settle_timeout
+                        )
+                        output_path = os.path.abspath(os.path.join(parser.output, f'{name}.png'))
+                        page.screenshot(path=output_path, full_page=True)
+                        results.append({
+                            'viewport': name,
+                            'width': viewport['width'],
+                            'height': viewport['height'],
+                            'path': output_path,
+                            'status': 'captured',
+                        })
+                        page.close()
+                finally:
+                    browser.close()
+        except Exception as error:
+            raise NTKError(f'Capture failed for {capture_url}: {error}') from error
         return self.output.result('capture', url=capture_url, results=results, count=len(results))

@@ -43,6 +43,14 @@ def main():
         sys.exit(1)
     except KeyboardInterrupt:
         pass
+    except Exception as e:
+        if getattr(args, 'json', False) is True:
+            output = Output()
+            output.configure(args)
+            output.error(getattr(args, 'command', 'ntk'), e, error_type=e.__class__.__name__)
+        else:
+            logging.exception(e)
+        sys.exit(1)
 
 
 if __name__ == '__main__':

@@ -247,6 +247,22 @@ class TestToolingContract(unittest.TestCase):
             with self.assertRaises(NTKError):
                 command.capture(parser)
 
+        class BrokenContext:
+            def __enter__(self):
+                raise RuntimeError('browser failed')
+
+            def __exit__(self, *args):
+                return None
+
+        sync_api = types.ModuleType('playwright.sync_api')
+        sync_api.sync_playwright = lambda: BrokenContext()
+        with patch.dict('sys.modules', {
+            'playwright': types.ModuleType('playwright'),
+            'playwright.sync_api': sync_api,
+        }):
+            with self.assertRaisesRegex(NTKError, 'Capture failed'):
+                command.capture(parser)
+
     @patch('ntk.command.Gateway')
     @patch('ntk.command.Config.read_config')
     def test_push_reports_invalid_explicit_file_and_fails(self, _read_config, gateway):

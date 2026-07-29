@@ -35,5 +35,20 @@ class TestMain(unittest.TestCase):
         self.assertEqual(payload['command'], 'validate')
         self.assertEqual(payload['error']['type'], 'TypeError')
 
+    @patch('ntk.__main__.Parser', autospec=True)
+    def test_main_keeps_unexpected_machine_errors_json_clean(self, mock_parser):
+        args = MagicMock()
+        args.json = True
+        args.quiet = False
+        args.no_progress = False
+        args.command = 'capture'
+        args.func.side_effect = RuntimeError('browser failed')
+        mock_parser.return_value.create_parser.return_value.parse_args.return_value = args
+        stdout = StringIO()
+        with self.assertRaises(SystemExit):
+            with redirect_stdout(stdout):
+                main()
+        self.assertEqual(json.loads(stdout.getvalue())['error']['type'], 'RuntimeError')
+
 if __name__ == '__main__':
     unittest.main()
