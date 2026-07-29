@@ -1,12 +1,17 @@
+import logging
 import time
 import requests
 from urllib.parse import urljoin
 
 from ntk.decorator import check_error
-from ntk.exceptions import NTKConnectionError
+from ntk.exceptions import NTKRequestError
 
 MAX_RETRIES = 3
-RETRY_BACKOFF_SECONDS = 1
+# The store API rate limit is 4 requests/second (250ms apart). Wait 400ms before every
+# request to stay under the limit so requests are never throttled.
+REQUEST_INTERVAL_SECONDS = 0.4
+# Give up on a single request after 30 seconds so a dropped connection fails instead of hanging.
+REQUEST_TIMEOUT = 30
 
 # Transport-level failures that are worth retrying rather than surfacing as a raw stack trace.
 TRANSIENT_EXCEPTIONS = (
@@ -23,25 +28,25 @@ class Gateway:
         self.apikey = apikey
 
     def _request(self, request_type, url, apikey=None, payload={}, files={}):
-        headers = {}
-        if apikey:
-            headers = {'Authorization': f'Bearer {apikey}'}
+        headers = {'Authorization': f'Bearer {apikey}'} if apikey else {}
 
+        reason = 'connection failed'
         for attempt in range(MAX_RETRIES):
+            # Space every request (and retry) to stay under the store rate limit.
+            time.sleep(REQUEST_INTERVAL_SECONDS)
             try:
-                response = requests.request(request_type, url, headers=headers, data=payload, files=files)
-            except TRANSIENT_EXCEPTIONS:
-                if attempt == MAX_RETRIES - 1:
-                    raise NTKConnectionError(f'Unable to reach {self.store} after {MAX_RETRIES} attempts.')
-                time.sleep(RETRY_BACKOFF_SECONDS * (2 ** attempt))
-                continue
+                response = requests.request(
+                    request_type, url, headers=headers, data=payload, files=files, timeout=REQUEST_TIMEOUT)
+            except TRANSIENT_EXCEPTIONS as error:
+                reason = 'timed out' if isinstance(error, requests.exceptions.Timeout) else 'connection failed'
+            else:
+                if not (response.status_code == 429 and "throttled" in response.content.decode()):
+                    return response
+                reason = 'throttled'
 
-            throttled = response.status_code == 429 and "throttled" in response.content.decode()
-            if throttled and attempt < MAX_RETRIES - 1:
-                time.sleep(RETRY_BACKOFF_SECONDS * (2 ** attempt))
-                continue
+            logging.warning(f'Request to {self.store} {reason} (attempt {attempt + 1}/{MAX_RETRIES}).')
 
-            return response
+        raise NTKRequestError(f'Request to {self.store} failed after {MAX_RETRIES} attempts ({reason}).')
 
     @check_error(error_format='Missing Themes in {store}')
     def get_themes(self):

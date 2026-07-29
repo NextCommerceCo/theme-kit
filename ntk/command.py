@@ -2,7 +2,6 @@ import asyncio
 import glob
 import logging
 import os
-import time
 import sass
 
 from watchfiles import awatch, Change
@@ -90,7 +89,6 @@ class Command:
             response = self.gateway.create_or_update_template(
                 theme_id=self.config.theme_id, template_name=relative_pathfile, content=content, files=files)
 
-            time.sleep(0.07)
             if not response.ok:
                 return
 
@@ -132,8 +130,6 @@ class Command:
                 with open(current_pathfile, "w", encoding="utf-8") as template_file:
                     template_file.write(template.get('content'))
                     template_file.close()
-
-            time.sleep(0.08)
 
     def _delete_templates(self, template_names):
         template_count = len(template_names)

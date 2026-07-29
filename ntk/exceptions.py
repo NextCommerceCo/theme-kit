@@ -10,5 +10,5 @@ class NTKNotFoundError(NTKError):
     """Raised on a 404 response (store, theme, or template not found)."""
 
 
-class NTKConnectionError(NTKError):
-    """Raised when a request cannot reach the store after retries."""
+class NTKRequestError(NTKError):
+    """Raised when a request keeps failing (connection error or throttling) after retries."""
