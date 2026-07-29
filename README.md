@@ -60,6 +60,9 @@ development:
 > [!WARNING]
 > Keep the API key out of source control. Do not commit `config.yml` to git if it contains the key.
 
+> [!TIP]
+> For CI or scripts, set the API key with the `NTK_APIKEY` environment variable instead of a flag or `config.yml`. The key is resolved in this order: `NTK_APIKEY`, then `--apikey`, then `config.yml`. A key from `NTK_APIKEY` is never written to `config.yml`.
+
 > [!NOTE]
 > `config.yml` supports multiple environments. Commands use the `development` entry by default; pass `-e` / `--env` to target another environment (for example `ntk push --env=production`). The `[development]` prefix in command output is the active environment.
 
