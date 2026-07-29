@@ -50,5 +50,6 @@ class TestMain(unittest.TestCase):
                 main()
         self.assertEqual(json.loads(stdout.getvalue())['error']['type'], 'RuntimeError')
 
+
 if __name__ == '__main__':
     unittest.main()

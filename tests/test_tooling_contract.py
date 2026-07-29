@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 
 from ntk.command import Command
 from ntk.conf import Config
-from ntk.exceptions import NTKError
 from ntk.ntk_parser import Parser
 from ntk.output import Output
 from ntk.utils import get_template_name, progress_bar
@@ -200,12 +199,12 @@ class TestToolingContract(unittest.TestCase):
         command = Command()
         with patch('ntk.command.sass', None):
             with patch('ntk.command.importlib.import_module', side_effect=ImportError):
-                with self.assertRaises(NTKError):
+                with self.assertRaises(RuntimeError):
                     command._compile_sass()
         compiler = MagicMock()
         compiler.compile.side_effect = RuntimeError('compile failed')
         with patch('ntk.command.sass', compiler):
-            with self.assertRaises(NTKError):
+            with self.assertRaises(RuntimeError):
                 command._compile_sass()
 
     @patch('ntk.command.Gateway')
@@ -244,7 +243,7 @@ class TestToolingContract(unittest.TestCase):
             url='/', output='qa-output', viewports='desktop', settle_timeout=1000,
         )
         with patch.dict('sys.modules', {'playwright.sync_api': None}):
-            with self.assertRaises(NTKError):
+            with self.assertRaises(RuntimeError):
                 command.capture(parser)
 
         class BrokenContext:
@@ -260,7 +259,7 @@ class TestToolingContract(unittest.TestCase):
             'playwright': types.ModuleType('playwright'),
             'playwright.sync_api': sync_api,
         }):
-            with self.assertRaisesRegex(NTKError, 'Capture failed'):
+            with self.assertRaisesRegex(RuntimeError, 'Capture failed'):
                 command.capture(parser)
 
     @patch('ntk.command.Gateway')

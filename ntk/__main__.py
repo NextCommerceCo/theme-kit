@@ -4,7 +4,6 @@ import sys
 
 from requests.exceptions import HTTPError
 
-from ntk.exceptions import NTKError
 from ntk.ntk_parser import Parser
 from ntk.output import Output
 
@@ -24,16 +23,7 @@ def main():
             sys.exit(1)
     except AttributeError:
         print('Use ntk -h or --help to see available commands')
-    except NTKError as e:
-        if getattr(args, 'json', False) is True:
-            output = Output()
-            output.configure(args)
-            output.error(
-                getattr(args, 'command', 'ntk'), e, error_type=e.__class__.__name__)
-        else:
-            logging.error(e)
-        sys.exit(1)
-    except (TypeError, HTTPError) as e:
+    except (TypeError, HTTPError, RuntimeError) as e:
         if getattr(args, 'json', False) is True:
             output = Output()
             output.configure(args)

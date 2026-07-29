@@ -191,14 +191,14 @@ class Command:
             try:
                 compiler = importlib.import_module('sass')
             except ImportError as error:
-                raise NTKError(
+                raise RuntimeError(
                     'Sass support is optional. Install next_theme_kit[sass] to use `ntk sass`.'
                 ) from error
         try:
             compiler.compile(dirname=(SASS_SOURCE, SASS_DESTINATION), output_style=self.config.sass_output_style)
             logging.info(f'[{self.config.env}] Sass successfully processed.')
         except Exception as error:
-            raise NTKError(f'[{self.config.env}] Sass processing failed: {error}') from error
+            raise RuntimeError(f'[{self.config.env}] Sass processing failed: {error}') from error
 
     @parser_config(theme_id_required=False)
     def init(self, parser):
@@ -307,7 +307,7 @@ class Command:
         try:
             from playwright.sync_api import sync_playwright
         except ImportError as error:
-            raise NTKError(
+            raise RuntimeError(
                 'Capture support is optional. Install next_theme_kit[capture] and run `playwright install chromium`.'
             ) from error
 
@@ -362,5 +362,5 @@ class Command:
                 finally:
                     browser.close()
         except Exception as error:
-            raise NTKError(f'Capture failed for {capture_url}: {error}') from error
+            raise RuntimeError(f'Capture failed for {capture_url}: {error}') from error
         return self.output.result('capture', url=capture_url, results=results, count=len(results))
