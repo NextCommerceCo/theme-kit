@@ -1,7 +1,10 @@
 import unittest
 from unittest.mock import call, MagicMock, patch
 
-from ntk.gateway import Gateway
+import requests
+
+from ntk.exceptions import NTKAuthError, NTKNotFoundError, NTKRequestError
+from ntk.gateway import Gateway, MAX_RETRIES, REQUEST_INTERVAL_SECONDS, REQUEST_TIMEOUT
 
 
 class TestGateway(unittest.TestCase):
@@ -38,12 +41,13 @@ class TestGateway(unittest.TestCase):
                 headers={'Authorization': 'Bearer apikey'},
                 data={
                     'name': 'assets/base.html', 'content': '{% load i18n %}\n\n<div class="mt-2">My home page</div>'},
-                files=files)
+                files=files, timeout=REQUEST_TIMEOUT)
         ]
         assert mock_request.mock_calls == expected_calls
 
+    @patch('ntk.gateway.time.sleep', autospec=True)
     @patch('ntk.gateway.requests.request', autospec=True)
-    def test_request_with_rate_limit_should_retry(self, mock_request):
+    def test_request_with_rate_limit_should_retry(self, mock_request, mock_sleep):
         mock_response_429 = MagicMock()
         mock_response_429.status_code = 429
         mock_response_429.content.decode.return_value = "throttled"
@@ -72,15 +76,87 @@ class TestGateway(unittest.TestCase):
                 headers={'Authorization': 'Bearer apikey'},
                 data={
                     'name': 'assets/base.html', 'content': '{% load i18n %}\n\n<div class="mt-2">My home page</div>'
-                }, files=files),
+                }, files=files, timeout=REQUEST_TIMEOUT),
             call(
                 'POST', 'http://simple.com/api/admin/themes/5/templates/',
                 headers={'Authorization': 'Bearer apikey'},
                 data={
                     'name': 'assets/base.html', 'content': '{% load i18n %}\n\n<div class="mt-2">My home page</div>'
-                }, files=files)
+                }, files=files, timeout=REQUEST_TIMEOUT)
         ]
         assert mock_request.mock_calls == expected_calls
+
+    @patch('ntk.gateway.time.sleep', autospec=True)
+    @patch('ntk.gateway.requests.request', autospec=True)
+    def test_request_raises_after_persistent_throttling(self, mock_request, mock_sleep):
+        mock_response_429 = MagicMock()
+        mock_response_429.status_code = 429
+        mock_response_429.content.decode.return_value = "throttled"
+
+        mock_request.return_value = mock_response_429
+
+        with self.assertRaises(NTKRequestError):
+            self.gateway._request('GET', 'http://simple.com/api/admin/themes/', apikey=self.apikey)
+
+        assert mock_request.call_count == MAX_RETRIES
+
+    @patch('ntk.gateway.time.sleep', autospec=True)
+    @patch('ntk.gateway.requests.request', autospec=True)
+    def test_request_retries_transient_error_then_succeeds(self, mock_request, mock_sleep):
+        mock_response_200 = MagicMock()
+        mock_response_200.status_code = 200
+
+        mock_request.side_effect = [requests.exceptions.ConnectionError(), mock_response_200]
+
+        response = self.gateway._request('GET', 'http://simple.com/api/admin/themes/', apikey=self.apikey)
+
+        assert mock_request.call_count == 2
+        assert response is mock_response_200
+
+    @patch('ntk.gateway.time.sleep', autospec=True)
+    @patch('ntk.gateway.requests.request', autospec=True)
+    def test_request_raises_after_persistent_transient_error(self, mock_request, mock_sleep):
+        # A Timeout is retried, clearly logged, then surfaced as a clean error — not a raw stack trace.
+        mock_request.side_effect = requests.exceptions.Timeout()
+
+        with self.assertLogs(level='WARNING') as log:
+            with self.assertRaises(NTKRequestError):
+                self.gateway._request('GET', 'http://simple.com/api/admin/themes/', apikey=self.apikey)
+
+        assert mock_request.call_count == MAX_RETRIES
+        self.assertTrue(any('timed out' in line for line in log.output))
+
+    @patch('ntk.gateway.time.sleep', autospec=True)
+    @patch('ntk.gateway.requests.request', autospec=True)
+    def test_request_waits_between_requests_to_respect_rate_limit(self, mock_request, mock_sleep):
+        mock_request.return_value.status_code = 200
+
+        self.gateway._request('GET', 'http://simple.com/api/admin/themes/', apikey=self.apikey)
+
+        # Every request is spaced by the fixed rate-limit interval (no exponential backoff).
+        mock_sleep.assert_called_once_with(REQUEST_INTERVAL_SECONDS)
+
+    #####
+    # 401 / 404 handling (check_error decorator)
+    #####
+    @patch('ntk.gateway.requests.request', autospec=True)
+    def test_request_401_raises_auth_error(self, mock_request):
+        mock_request.return_value.status_code = 401
+
+        with self.assertRaises(NTKAuthError) as error:
+            self.gateway.get_themes()
+
+        self.assertEqual(str(error.exception), 'Invalid API key for http://simple.com.')
+
+    @patch('ntk.gateway.requests.request', autospec=True)
+    def test_request_404_raises_not_found_error_with_url(self, mock_request):
+        mock_request.return_value.status_code = 404
+        mock_request.return_value.url = 'http://simple.com/api/admin/themes/6/templates/'
+
+        with self.assertRaises(NTKNotFoundError) as error:
+            self.gateway.get_templates(theme_id=6)
+
+        self.assertIn('http://simple.com/api/admin/themes/6/templates/', str(error.exception))
 
     #####
     # get_themes
@@ -104,7 +180,7 @@ class TestGateway(unittest.TestCase):
         self.gateway.get_themes()
 
         expected_call = call('GET', 'http://simple.com/api/admin/themes/',
-                             headers={'Authorization': 'Bearer apikey'}, data={}, files={})
+                             headers={'Authorization': 'Bearer apikey'}, data={}, files={}, timeout=REQUEST_TIMEOUT)
         self.assertIn(expected_call, mock_request.mock_calls)
 
     ####
@@ -131,7 +207,8 @@ class TestGateway(unittest.TestCase):
         self.gateway.create_theme(name="Test Init Theme")
 
         expected_call = call('POST', 'http://simple.com/api/admin/themes/',
-                             headers={'Authorization': 'Bearer apikey'}, data=payload, files={})
+                             headers={'Authorization': 'Bearer apikey'}, data=payload, files={},
+                             timeout=REQUEST_TIMEOUT)
         self.assertIn(expected_call, mock_request.mock_calls)
 
     #####
@@ -158,7 +235,7 @@ class TestGateway(unittest.TestCase):
         self.gateway.get_templates(theme_id=6)
 
         expected_call = call('GET', 'http://simple.com/api/admin/themes/6/templates/',
-                             headers={'Authorization': 'Bearer apikey'}, data={}, files={})
+                             headers={'Authorization': 'Bearer apikey'}, data={}, files={}, timeout=REQUEST_TIMEOUT)
         self.assertIn(expected_call, mock_request.mock_calls)
 
     #####
@@ -186,7 +263,7 @@ class TestGateway(unittest.TestCase):
         self.gateway.get_template(theme_id=6, template_name=template_name)
 
         expected_call = call('GET', f'http://simple.com/api/admin/themes/6/templates/?name={template_name}',
-                             headers={'Authorization': 'Bearer apikey'}, data={}, files={})
+                             headers={'Authorization': 'Bearer apikey'}, data={}, files={}, timeout=REQUEST_TIMEOUT)
         self.assertIn(expected_call, mock_request.mock_calls)
 
     #####
@@ -220,7 +297,8 @@ class TestGateway(unittest.TestCase):
             theme_id=6, template_name=payload['name'], content=payload['content'], files=files)
 
         expected_call = call('POST', 'http://simple.com/api/admin/themes/6/templates/',
-                             headers={'Authorization': 'Bearer apikey'}, data=payload, files=files)
+                             headers={'Authorization': 'Bearer apikey'}, data=payload, files=files,
+                             timeout=REQUEST_TIMEOUT)
         self.assertIn(expected_call, mock_request.mock_calls)
 
     #####
@@ -248,5 +326,5 @@ class TestGateway(unittest.TestCase):
         self.gateway.delete_template(theme_id=6, template_name='asset/custom.css')
 
         expected_call = call('DELETE', 'http://simple.com/api/admin/themes/6/templates/?name=asset/custom.css',
-                             headers={'Authorization': 'Bearer apikey'}, data={}, files={})
+                             headers={'Authorization': 'Bearer apikey'}, data={}, files={}, timeout=REQUEST_TIMEOUT)
         self.assertIn(expected_call, mock_request.mock_calls)

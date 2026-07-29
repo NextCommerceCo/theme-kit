@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 import logging
+import sys
+from importlib.metadata import version, PackageNotFoundError
 
 from requests.exceptions import HTTPError
 
+from ntk.exceptions import NTKError
 from ntk.ntk_parser import Parser
 
 logging.basicConfig(
@@ -12,13 +15,26 @@ logging.basicConfig(
 )
 
 
+def theme_kit_version():
+    try:
+        return version('next-theme-kit')
+    except PackageNotFoundError:
+        return 'unknown'
+
+
 def main():
+    logging.info(f'NEXT Theme Kit version {theme_kit_version()}')
     parser = Parser().create_parser()
     args = parser.parse_args()
     try:
         args.func(args)
     except AttributeError:
         print('Use ntk -h or --help to see available commands')
+    except NTKError as e:
+        # print new line for support error on process progress bar
+        print()
+        logging.error(e)
+        sys.exit(1)
     except (TypeError, HTTPError) as e:
         # print new line for support error on process progress bar
         print()

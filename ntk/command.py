@@ -2,7 +2,6 @@ import asyncio
 import glob
 import logging
 import os
-import time
 import sass
 
 from watchfiles import awatch, Change
@@ -12,6 +11,7 @@ from ntk.conf import (
     SASS_EXTENSIONS,
 )
 from ntk.decorator import parser_config
+from ntk.exceptions import NTKError, NTKRequestError
 from ntk.gateway import Gateway
 from ntk.utils import get_template_name, progress_bar
 
@@ -49,12 +49,17 @@ class Command:
             if not pathfile.endswith(valid_extensions):
                 continue
             template_name = get_template_name(pathfile)
-            if event_type in [Change.added, Change.modified]:
-                logging.info(f'[{self.config.env}] {event_type.name.title()} {template_name}')
-                self._push_templates([template_name], compile_sass=True)
-            elif event_type == Change.deleted:
-                logging.info(f'[{self.config.env}] {event_type.name.title()} {template_name}')
-                self._delete_templates([template_name])
+            try:
+                if event_type in [Change.added, Change.modified]:
+                    logging.info(f'[{self.config.env}] {event_type.name.title()} {template_name}')
+                    self._push_templates([template_name], compile_sass=True)
+                elif event_type == Change.deleted:
+                    logging.info(f'[{self.config.env}] {event_type.name.title()} {template_name}')
+                    self._delete_templates([template_name])
+            except NTKRequestError as error:
+                # Keep watching on a transient failure (network/throttle). Permanent errors
+                # (bad key, missing theme) propagate and stop the watcher.
+                logging.error(f'[{self.config.env}] {error}')
 
     def _push_templates(self, template_names, compile_sass=False):
         template_names = self._get_accept_files(template_names)
@@ -85,9 +90,10 @@ class Command:
             response = self.gateway.create_or_update_template(
                 theme_id=self.config.theme_id, template_name=relative_pathfile, content=content, files=files)
 
-            time.sleep(0.07)
             if not response.ok:
-                return
+                return False
+
+        return True
 
     def _pull_templates(self, template_names):
         templates = []
@@ -127,8 +133,6 @@ class Command:
                 with open(current_pathfile, "w", encoding="utf-8") as template_file:
                     template_file.write(template.get('content'))
                     template_file.close()
-
-            time.sleep(0.08)
 
     def _delete_templates(self, template_names):
         template_count = len(template_names)
@@ -186,7 +190,8 @@ class Command:
 
     @parser_config()
     def push(self, parser):
-        self._push_templates(parser.filenames or [])
+        if not self._push_templates(parser.filenames or []):
+            raise NTKError(f'[{self.config.env}] Push failed, see the error above.')
 
     @parser_config()
     def watch(self, parser):
