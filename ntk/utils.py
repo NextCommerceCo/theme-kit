@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -7,7 +8,10 @@ def get_template_name(pathfile):
     return Path(os.path.relpath(pathfile)).as_posix()
 
 
-def progress_bar(iterable, prefix='', suffix='', decimals=1, length=100, fill='â–ˆ', printEnd="\r"):
+def progress_bar(
+    iterable, prefix='', suffix='', decimals=1, length=100, fill='#', printEnd="\r",
+    enabled=None, stream=None,
+):
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -21,8 +25,13 @@ def progress_bar(iterable, prefix='', suffix='', decimals=1, length=100, fill='â
         printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
     """
     total = len(iterable)
+    stream = stream or sys.stderr
+    if enabled is None:
+        enabled = stream.isatty()
 
-    if total == 0:
+    if total == 0 or not enabled:
+        for item in iterable:
+            yield item
         return
 
     # Progress Bar Printing Function
@@ -31,7 +40,11 @@ def progress_bar(iterable, prefix='', suffix='', decimals=1, length=100, fill='â
         filledLength = int(length * iteration // total)
         bar = fill * filledLength + '-' * (length - filledLength)
         current_time = time.strftime('%Y-%m-%d %H:%M:%S')
-        print(f'\r{current_time} INFO {prefix} |{bar}| {percent}% {suffix}', end=printEnd)
+        print(
+            f'\r{current_time} INFO {prefix} |{bar}| {percent}% {suffix}',
+            end=printEnd,
+            file=stream,
+        )
 
     # Initial Call
     print_progress_bar(0)
@@ -40,4 +53,4 @@ def progress_bar(iterable, prefix='', suffix='', decimals=1, length=100, fill='â
         yield item
         print_progress_bar(i + 1)
     # Print New Line on Complete
-    print()
+    print(file=stream)

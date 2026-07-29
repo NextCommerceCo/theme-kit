@@ -17,11 +17,12 @@ def parser_config(*args, **kwargs):
             for name, value in kwargs.items():
                 setattr(self.config, name, value)
 
+            self.output.configure(parser)
             self.config.parser_config(parser, write_file=kwargs.get('write_file', False))
             self.gateway.store = self.config.store
             self.gateway.apikey = self.config.apikey
 
-            func(self, parser, **func_kwargs)
+            return func(self, parser, **func_kwargs)
 
         return _wrapper
 

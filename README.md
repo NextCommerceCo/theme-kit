@@ -21,6 +21,14 @@ If you already have `python` and `pip`, install with the following command:
 pip install next-theme-kit
 ```
 
+The core CLI is pure Python and installs on macOS (including Apple Silicon), Linux, and native Windows.
+Install optional features only when a project needs them:
+
+```bash
+pip install 'next-theme-kit[sass]'     # legacy libsass compilation
+pip install 'next-theme-kit[capture]'  # screenshot capture; then: playwright install chromium
+```
+
 #### Mac OSX Requirements
 See how to install `python` and `pip` with [HomeBrew](https://docs.brew.sh/Homebrew-and-Python#python-3x). Once you have completed this step you can install using the `pip` instructions above.
 
@@ -93,6 +101,8 @@ With the package installed, you can now use the commands inside your theme direc
 | `ntk push`     | Push current theme state to store |
 | `ntk watch`    | Watch for local changes and automatically push changes to store |
 | `ntk sass`     | Process sass to css, see [Sass Processing](#sass-processing) |
+| `ntk validate` | Validate theme files locally or against the store |
+| `ntk capture`  | Capture deterministic desktop and mobile PNGs |
 
 ### Browse Store Themes
 
@@ -152,7 +162,7 @@ On success, `ntk init` logs the new theme ID and name, and persists the theme ID
 To sync files between your local directory and the store, use `ntk push` to upload and `ntk pull` to download. Both upload or download the whole theme by default, and both accept file paths as positional arguments to limit the operation to specific files.
 
 > [!NOTE]
-> File paths are relative to the theme root. `ntk push` only uploads files inside the theme directories (`assets`, `checkout`, `configs`, `layouts`, `locales`, `partials`, `sass`, `templates`) with valid theme file extensions — a path outside of them is skipped silently, not reported as an error.
+> File paths are relative to the theme root. `ntk push` only uploads files inside the theme directories (`assets`, `checkout`, `configs`, `layouts`, `locales`, `partials`, `sass`, `templates`) with valid theme file extensions. Explicit unsupported or missing paths are reported as rejected and make the command fail.
 
 | Example | Command |
 | ------- | ------- |
@@ -176,6 +186,43 @@ On start, `ntk watch` logs the store, theme ID, a preview-theme URL, and the dir
 
 > [!NOTE]
 > `ntk watch` only uploads files with valid theme extensions. It does not accept file arguments. To scope changes to specific files, run `ntk push` with file paths instead.
+
+### Validate Before Upload
+
+Run deterministic local checks for JSON syntax, template block balance, supported paths, and unsafe custom-product inheritance:
+
+```bash
+ntk validate templates/catalogue/product.subscription.html configs/settings.json
+```
+
+Add `--server` to submit locally valid text files to the platform's template validator without saving them:
+
+```bash
+ntk validate --server templates/catalogue/product.subscription.html
+```
+
+Local validation does not claim to prove a complete runtime render. Server validation requires the store, API key, and theme ID from flags or `config.yml`.
+
+### Capture Reproducible Screenshots
+
+With the `capture` extra and Chromium installed, capture real rendered PNGs at the fixed 1440px desktop and 390px mobile widths:
+
+```bash
+ntk capture --url="/?preview_theme=<theme-id>&skip_cache=1" \
+  --output=qa-output --viewports=desktop,mobile --json --no-progress
+```
+
+Capture waits for network idle, web fonts, lazy-loaded content, and images before writing full-page PNGs. It is suitable for local use and CI; it never substitutes DOM metrics for visual evidence.
+
+### Automation Output
+
+Every finite command accepts `--json`, `--quiet`, and `--no-progress`. `--json` writes exactly one versioned result object to stdout; logs stay on stderr, and progress is automatically disabled for JSON and non-interactive output. Push/pull/validation results are reported per file. Authentication, network, validation, rejection, and partial-transfer failures return a non-zero exit status.
+
+The JSON envelope is stable within schema version `1`:
+
+```json
+{"schema_version":"1","command":"push","ok":true,"count":1,"results":[{"path":"templates/index.html","status":"uploaded"}]}
+```
 
 ### Sass Processing
 

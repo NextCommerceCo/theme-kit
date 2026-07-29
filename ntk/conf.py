@@ -1,6 +1,7 @@
 
 import logging
 import os
+from urllib.parse import urlparse
 import yaml
 
 CONFIG_FILE_NAME = './config.yml'
@@ -99,12 +100,31 @@ class Config(object):
             pluralize = 'is' if len(error_msgs) == 1 else 'are'
             raise TypeError(f'[{self.env}] argument {message} {pluralize} required.')
 
+        if self.store:
+            self.store = self.normalize_store(self.store)
+
         if self.sass_output_style and self.sass_output_style not in SASS_OUTPUT_STYLES:
             raise TypeError(
                 f'[{self.env}] argument -sos/--sass_output_style is unsupported '
                 'output_style; choose one of nested, expanded, compact, and compressed')
 
         return True
+
+    @staticmethod
+    def normalize_store(store):
+        store = store.strip().rstrip('/')
+        if '://' not in store:
+            store = f'https://{store}'
+        parsed = urlparse(store)
+        if parsed.scheme not in ('http', 'https') or not parsed.netloc or parsed.path not in ('', '/'):
+            raise TypeError(
+                'Store must be an absolute http(s) origin, for example https://store.example.com.'
+            )
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise TypeError(
+                'Store must be an absolute http(s) origin, for example https://store.example.com.'
+            )
+        return f'{parsed.scheme}://{parsed.netloc}'
 
     def read_config(self, update=True):
         configs = {}

@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-__version__ = '1.1.1'
+__version__ = '1.2.0'
 
 tests_require = [
     "flake8",
@@ -24,14 +24,17 @@ setup(
         "PyYAML>=5.4",
         "requests>=2.25",
         "watchfiles>=0.18",
-        "libsass>=0.21.0"
     ],
     entry_points={
         'console_scripts': [
             'ntk = ntk.__main__:main',
         ],
     },
-    extras_require={"test": tests_require},
+    extras_require={
+        "test": tests_require,
+        "sass": ["libsass>=0.21.0"],
+        "capture": ["playwright>=1.40"],
+    },
     packages=find_packages(),
     python_requires='>=3.10'
 )

@@ -61,6 +61,13 @@ class Gateway:
 
         return self._request("POST", url, apikey=self.apikey, payload=payload, files=files)
 
+    @check_error(error_format='Validating {template_name} for theme id #{theme_id} failed.{error_msg}')
+    def validate_template(self, theme_id, template_name, content=None):
+        api_path = f"/api/admin/themes/{theme_id}/validate-template/"
+        url = urljoin(self.store, api_path)
+        payload = dict(name=template_name, content=content)
+        return self._request("POST", url, apikey=self.apikey, payload=payload)
+
     @check_error(error_format='Deleting {template_name} file from theme id #{theme_id} failed.{error_msg}',
                  response_json=False)
     def delete_template(self, theme_id, template_name):
