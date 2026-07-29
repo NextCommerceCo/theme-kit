@@ -12,8 +12,8 @@ from ntk.command import Command
 from ntk.conf import Config
 from ntk.ntk_parser import Parser
 from ntk.output import Output
-from ntk.utils import progress_bar
-from ntk.validation import validate_local_file
+from ntk.utils import get_template_name, progress_bar
+from ntk.validation import _template_errors, validate_local_file
 
 
 class TestToolingContract(unittest.TestCase):
@@ -31,6 +31,8 @@ class TestToolingContract(unittest.TestCase):
         self.assertEqual(json.loads(stdout.getvalue()), payload)
         self.assertEqual(payload['schema_version'], '1')
         self.assertTrue(payload['ok'])
+        output.json = False
+        self.assertFalse(output.error('push', 'broken')['ok'])
 
     def test_progress_is_ascii_stderr_and_disabled_when_requested(self):
         stream = io.StringIO()
@@ -62,6 +64,62 @@ class TestToolingContract(unittest.TestCase):
                 output_file.write('{% block content %}')
             self.assertEqual(validate_local_file(json_path)['status'], 'invalid')
             self.assertEqual(validate_local_file(html_path)['status'], 'invalid')
+
+    def test_local_validation_covers_media_paths_and_product_inheritance(self):
+        self.assertEqual(_template_errors('{% endblock %}'), ['endblock has no matching block'])
+        self.assertEqual(
+            _template_errors('{% block alpha %}{% endblock beta %}'),
+            ['endblock beta closes block alpha'],
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            old_directory = os.getcwd()
+            try:
+                os.chdir(directory)
+                os.makedirs('templates/catalogue')
+                product_path = 'templates/catalogue/product.custom.html'
+                with open(product_path, 'w', encoding='utf-8') as output_file:
+                    output_file.write('{% extends "templates/catalogue/product.html" %}')
+                with open('image.png', 'wb') as output_file:
+                    output_file.write(b'png')
+                self.assertEqual(validate_local_file(product_path)['status'], 'invalid')
+                self.assertEqual(validate_local_file('image.png')['status'], 'valid')
+                self.assertEqual(validate_local_file('missing.json')['status'], 'invalid')
+                self.assertEqual(validate_local_file('unsupported.txt')['status'], 'invalid')
+            finally:
+                os.chdir(old_directory)
+
+    @patch('ntk.utils.os.path.relpath', side_effect=ValueError)
+    def test_template_name_handles_windows_cross_drive_path(self, _relpath):
+        self.assertTrue(get_template_name('/tmp/theme.json').endswith('tmp/theme.json'))
+
+    @patch('ntk.command.Gateway')
+    @patch('ntk.command.Config.read_config')
+    def test_validate_reports_local_rejections_and_server_results(self, _read_config, gateway):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'settings.json')
+            with open(path, 'w', encoding='utf-8') as output_file:
+                output_file.write('{}')
+            command = Command()
+            command.config.apikey = 'key'
+            command.config.store = 'https://store.example.com'
+            command.config.theme_id = 42
+            command._get_accept_files = MagicMock(return_value=[path])
+            gateway.return_value.validate_template.return_value.ok = True
+            parser = SimpleNamespace(
+                env='development', apikey=None, store=None, theme_id=None,
+                sass_output_style=None, filenames=[path, 'bad.tmp'], server=False,
+                json=False, quiet=True, no_progress=True,
+            )
+            local_result = command.validate(parser)
+            self.assertFalse(local_result['ok'])
+            self.assertEqual(local_result['results'][0]['status'], 'invalid')
+
+            parser.filenames = [path]
+            parser.server = True
+            server_result = command.validate(parser)
+            self.assertTrue(server_result['ok'])
+            self.assertEqual(server_result['mode'], 'server')
+            gateway.return_value.validate_template.assert_called_once()
 
     @patch('ntk.command.Config.read_config')
     def test_capture_uses_fixed_viewports_and_settle_contract(self, _read_config):
