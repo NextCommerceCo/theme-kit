@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import logging
 import sys
+from importlib.metadata import version, PackageNotFoundError
 
 from requests.exceptions import HTTPError
 
@@ -14,7 +15,15 @@ logging.basicConfig(
 )
 
 
+def theme_kit_version():
+    try:
+        return version('next-theme-kit')
+    except PackageNotFoundError:
+        return 'unknown'
+
+
 def main():
+    logging.info(f'NEXT Theme Kit version {theme_kit_version()}')
     parser = Parser().create_parser()
     args = parser.parse_args()
     try:

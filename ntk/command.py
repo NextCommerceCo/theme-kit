@@ -11,7 +11,7 @@ from ntk.conf import (
     SASS_EXTENSIONS,
 )
 from ntk.decorator import parser_config
-from ntk.exceptions import NTKError
+from ntk.exceptions import NTKRequestError
 from ntk.gateway import Gateway
 from ntk.utils import get_template_name, progress_bar
 
@@ -56,8 +56,9 @@ class Command:
                 elif event_type == Change.deleted:
                     logging.info(f'[{self.config.env}] {event_type.name.title()} {template_name}')
                     self._delete_templates([template_name])
-            except NTKError as error:
-                # Keep watching on a transient failure instead of killing the watcher.
+            except NTKRequestError as error:
+                # Keep watching on a transient failure (network/throttle). Permanent errors
+                # (bad key, missing theme) propagate and stop the watcher.
                 logging.error(f'[{self.config.env}] {error}')
 
     def _push_templates(self, template_names, compile_sass=False):

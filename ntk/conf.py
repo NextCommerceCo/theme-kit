@@ -58,6 +58,9 @@ class Config(object):
     theme_id = None
     sass_output_style = None
 
+    # True when apikey came from the NTK_APIKEY env var, so it is never written to config.yml.
+    apikey_from_env = False
+
     env = 'development'
 
     apikey_required = True
@@ -72,7 +75,11 @@ class Config(object):
     def parser_config(self, parser, write_file=False):
         self.env = parser.env
         self.read_config()
-        if getattr(parser, 'apikey', None):
+        # API key precedence: NTK_APIKEY, then --apikey, then config.yml (loaded above).
+        if os.environ.get('NTK_APIKEY'):
+            self.apikey = os.environ['NTK_APIKEY']
+            self.apikey_from_env = True
+        elif getattr(parser, 'apikey', None):
             self.apikey = parser.apikey
 
         if getattr(parser, 'theme_id', None):
@@ -124,8 +131,11 @@ class Config(object):
     def write_config(self):
         configs = self.read_config(update=False)
 
+        # Never persist an env-supplied key; keep whatever key was already on disk.
+        apikey = (configs.get(self.env) or {}).get('apikey') if self.apikey_from_env else self.apikey
+
         new_config = {
-            'apikey': self.apikey,
+            'apikey': apikey,
             'store': self.store,
             'theme_id': self.theme_id,
             'sass': {

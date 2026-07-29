@@ -488,19 +488,31 @@ class TestCommand(unittest.TestCase):
         self.assertIn(expected_call_added, self.mock_gateway.mock_calls)
 
     @patch("ntk.command.Command._push_templates", autospec=True)
-    def test_watch_logs_and_continues_when_push_raises_ntk_error(self, mock_push_templates):
-        """A transient NTKError during watch should be logged, not kill the watcher."""
+    def test_watch_logs_and_continues_on_transient_error(self, mock_push_templates):
+        """A transient NTKRequestError during watch should be logged, not kill the watcher."""
+        from ntk.exceptions import NTKRequestError
+        mock_push_templates.side_effect = NTKRequestError('Request to http://development.com failed.')
+        self.command.config.parser_config(self.parser)
+        changes = [
+            (Change.modified, './templates/index.html'),
+        ]
+        # Should not raise — the transient error is caught inside _handle_files_change.
+        with self.assertLogs(level='ERROR') as log:
+            self.command._handle_files_change(changes)
+        self.assertTrue(
+            any('Request to http://development.com failed.' in line for line in log.output))
+
+    @patch("ntk.command.Command._push_templates", autospec=True)
+    def test_watch_stops_on_permanent_error(self, mock_push_templates):
+        """A permanent NTKAuthError should propagate and stop the watcher, not be swallowed."""
         from ntk.exceptions import NTKAuthError
         mock_push_templates.side_effect = NTKAuthError('Invalid API key for http://development.com.')
         self.command.config.parser_config(self.parser)
         changes = [
             (Change.modified, './templates/index.html'),
         ]
-        # Should not raise — the error is caught inside _handle_files_change.
-        with self.assertLogs(level='ERROR') as log:
+        with self.assertRaises(NTKAuthError):
             self.command._handle_files_change(changes)
-        self.assertTrue(
-            any('Invalid API key for http://development.com.' in line for line in log.output))
 
     @patch("ntk.command.Command._get_accept_files", autospec=True)
     @patch("ntk.command.Command._compile_sass", autospec=True)

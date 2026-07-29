@@ -29,6 +29,17 @@ class TestMain(unittest.TestCase):
         # No command supplied — should print the help hint and not raise.
         main()
 
+    @patch('ntk.__main__.Parser', autospec=True)
+    def test_main_logs_theme_kit_version(self, mock_parser):
+        args = MagicMock()
+        args.func.return_value = None
+        mock_parser.return_value.create_parser.return_value.parse_args.return_value = args
+
+        with self.assertLogs(level='INFO') as log:
+            main()
+
+        self.assertTrue(any('NEXT Theme Kit version' in line for line in log.output))
+
 
 if __name__ == '__main__':
     unittest.main()
