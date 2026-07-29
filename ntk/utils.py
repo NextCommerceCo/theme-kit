@@ -5,7 +5,13 @@ from pathlib import Path
 
 
 def get_template_name(pathfile):
-    return Path(os.path.relpath(pathfile)).as_posix()
+    try:
+        relative_path = os.path.relpath(pathfile)
+    except ValueError:
+        # Windows temporary directories can live on a different drive from
+        # the theme checkout. Keep the absolute path usable for diagnostics.
+        relative_path = pathfile
+    return Path(relative_path).as_posix()
 
 
 def progress_bar(
