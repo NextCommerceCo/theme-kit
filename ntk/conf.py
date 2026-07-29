@@ -124,7 +124,7 @@ class Config(object):
             raise TypeError(
                 'Store must be an absolute http(s) origin, for example https://store.example.com.'
             )
-        return f'{parsed.scheme}://{parsed.netloc}'
+        return f'https://{parsed.netloc}'
 
     def read_config(self, update=True):
         configs = {}

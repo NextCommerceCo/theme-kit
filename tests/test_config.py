@@ -158,7 +158,7 @@ class TestConfig(unittest.TestCase):
             self.config.parser_config(parser=parser)
 
         self.assertEqual(self.config.apikey, '2b78f637972b1c9d1234')
-        self.assertEqual(self.config.store, 'http://sandbox.com')
+        self.assertEqual(self.config.store, 'https://sandbox.com')
         self.assertEqual(self.config.theme_id, 1234)
         self.assertEqual(self.config.sass_output_style, 'nested')
         mock_write_config.assert_not_called()
@@ -167,7 +167,7 @@ class TestConfig(unittest.TestCase):
             self.config.parser_config(parser=parser, write_file=True)
 
         self.assertEqual(self.config.apikey, '2b78f637972b1c9d1234')
-        self.assertEqual(self.config.store, 'http://sandbox.com')
+        self.assertEqual(self.config.store, 'https://sandbox.com')
         self.assertEqual(self.config.theme_id, 1234)
         self.assertEqual(self.config.sass_output_style, 'nested')
         mock_write_config.assert_called_once()

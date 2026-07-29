@@ -58,6 +58,8 @@ Store authentication uses [OAuth 2.0](https://auth0.com/intro-to-iam/what-is-oau
 
 `ntk` reads its connection settings from two places: command flags (`--apikey`, `--store`, `--theme_id`) and the `config.yml` file in your theme directory. You do not need to create `config.yml` by hand — `ntk checkout` and `ntk init` write it for you, and after that commands run without flags:
 
+Store values are normalized to an absolute HTTPS origin: `store.example.com` and `http://store.example.com` become `https://store.example.com`. Paths, credentials, query strings, fragments, and non-HTTP schemes are rejected.
+
 ```yaml
 development:
   apikey: <api key>

@@ -55,6 +55,11 @@ def validate_local_file(path):
             if "extends 'templates/catalogue/product.html'" in content or (
                     'extends "templates/catalogue/product.html"' in content):
                 errors.append('custom product templates must be standalone or extend layouts/base.html')
+    elif extension == '.js':
+        if content.startswith('\ufeff'):
+            errors.append('JavaScript must be UTF-8 without a byte-order mark')
+        if '\x00' in content:
+            errors.append('JavaScript must not contain NUL bytes')
     return {
         'path': relative_path,
         'status': 'invalid' if errors else 'valid',

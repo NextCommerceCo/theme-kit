@@ -152,7 +152,7 @@ class TestCommand(unittest.TestCase):
             self.assertEqual(self.mock_gateway.mock_calls, expected_gateway_calls)
 
         expected_logging = [
-            'WARNING:root:[development] Missing Themes in http://development.com'
+            'WARNING:root:[development] Missing Themes in https://development.com'
         ]
         self.assertEqual(cm.output, expected_logging)
 

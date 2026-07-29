@@ -20,6 +20,7 @@ from ntk.validation import _template_errors, validate_local_file
 class TestToolingContract(unittest.TestCase):
     def test_store_normalizes_bare_hostname_and_rejects_paths(self):
         self.assertEqual(Config.normalize_store('store.example.com/'), 'https://store.example.com')
+        self.assertEqual(Config.normalize_store('http://store.example.com'), 'https://store.example.com')
         with self.assertRaises(TypeError):
             Config.normalize_store('https://store.example.com/admin')
 
@@ -86,6 +87,11 @@ class TestToolingContract(unittest.TestCase):
                 self.assertEqual(validate_local_file('image.png')['status'], 'valid')
                 self.assertEqual(validate_local_file('missing.json')['status'], 'invalid')
                 self.assertEqual(validate_local_file('unsupported.txt')['status'], 'invalid')
+                with open('bad.js', 'w', encoding='utf-8') as output_file:
+                    output_file.write('\ufeffconst bad = "\x00";')
+                js_result = validate_local_file('bad.js')
+                self.assertEqual(js_result['status'], 'invalid')
+                self.assertEqual(len(js_result['errors']), 2)
             finally:
                 os.chdir(old_directory)
 
