@@ -249,3 +249,22 @@ class TestConfig(unittest.TestCase):
         dumped = mock_dump.call_args[0][0]
         self.assertEqual(dumped['development']['apikey'], 'file-key')
         self.assertEqual(dumped['development']['theme_id'], 2)
+
+    @patch("yaml.dump", autospec=True)
+    @patch("yaml.load", autospec=True)
+    @patch("os.path.exists", autospec=True)
+    def test_write_config_omits_apikey_on_first_env_only_run(self, mock_exists, mock_load, mock_dump):
+        mock_exists.return_value = False  # no config.yml yet
+        mock_load.return_value = {}
+
+        self.config.apikey = 'env-key'
+        self.config.apikey_from_env = True
+        self.config.store = 'http://simple.com'
+        self.config.theme_id = 1
+        self.config.sass_output_style = 'nested'
+
+        with patch('builtins.open', mock_open()):
+            self.config.write_config()
+
+        dumped = mock_dump.call_args[0][0]
+        self.assertNotIn('apikey', dumped['development'])

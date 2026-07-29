@@ -135,13 +135,15 @@ class Config(object):
         apikey = (configs.get(self.env) or {}).get('apikey') if self.apikey_from_env else self.apikey
 
         new_config = {
-            'apikey': apikey,
             'store': self.store,
             'theme_id': self.theme_id,
             'sass': {
                 'output_style': self.sass_output_style or 'nested'  # default sass output style is nested
             }
         }
+        # Only persist the key when there is one; avoids writing `apikey: None` on a first env-only run.
+        if apikey:
+            new_config['apikey'] = apikey
         # If the config has been changed, then the config will be saved to config.yml.
         if configs.get(self.env) != new_config:
             configs[self.env] = new_config
