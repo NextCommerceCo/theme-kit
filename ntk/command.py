@@ -11,7 +11,7 @@ from ntk.conf import (
     SASS_EXTENSIONS,
 )
 from ntk.decorator import parser_config
-from ntk.exceptions import NTKRequestError
+from ntk.exceptions import NTKError, NTKRequestError
 from ntk.gateway import Gateway
 from ntk.utils import get_template_name, progress_bar
 
@@ -91,7 +91,9 @@ class Command:
                 theme_id=self.config.theme_id, template_name=relative_pathfile, content=content, files=files)
 
             if not response.ok:
-                return
+                return False
+
+        return True
 
     def _pull_templates(self, template_names):
         templates = []
@@ -188,7 +190,8 @@ class Command:
 
     @parser_config()
     def push(self, parser):
-        self._push_templates(parser.filenames or [])
+        if not self._push_templates(parser.filenames or []):
+            raise NTKError(f'[{self.config.env}] Push failed, see the error above.')
 
     @parser_config()
     def watch(self, parser):

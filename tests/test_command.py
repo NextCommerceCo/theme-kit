@@ -367,6 +367,18 @@ class TestCommand(unittest.TestCase):
         self.assertIn('templates/index.html', str(upload_calls[0]))
         self.assertNotIn('.tmp', str(upload_calls[0]))
 
+    @patch("ntk.command.Command._get_accept_files", autospec=True)
+    def test_push_command_raises_when_an_upload_fails(self, mock_get_accept_files):
+        """A failed upload must make ntk push raise (exit non-zero), not finish silently."""
+        from ntk.exceptions import NTKError
+        mock_get_accept_files.return_value = [f'{os.getcwd()}/layout/base.html']
+        self.mock_gateway.return_value.create_or_update_template.return_value.ok = False
+        self.command.config.parser_config(self.parser)
+        self.parser.filenames = None
+        with patch("builtins.open", self.mock_file):
+            with self.assertRaises(NTKError):
+                self.command.push(self.parser)
+
     @patch("ntk.command.glob.glob", autospec=True)
     def test_get_accept_files_with_no_filenames_returns_only_glob_matched_files(
         self, mock_glob
