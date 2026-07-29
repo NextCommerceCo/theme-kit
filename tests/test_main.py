@@ -1,7 +1,9 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from ntk.__main__ import main
+from importlib.metadata import PackageNotFoundError
+
+from ntk.__main__ import main, theme_kit_version
 from ntk.exceptions import NTKNotFoundError
 
 
@@ -39,6 +41,11 @@ class TestMain(unittest.TestCase):
             main()
 
         self.assertTrue(any('NEXT Theme Kit version' in line for line in log.output))
+
+    @patch('ntk.__main__.version', autospec=True)
+    def test_theme_kit_version_returns_unknown_when_not_installed(self, mock_version):
+        mock_version.side_effect = PackageNotFoundError()
+        self.assertEqual(theme_kit_version(), 'unknown')
 
 
 if __name__ == '__main__':
