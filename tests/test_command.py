@@ -1,4 +1,5 @@
 import os
+import tempfile
 import unittest
 from unittest.mock import call, MagicMock, mock_open, patch
 
@@ -409,6 +410,21 @@ class TestCommand(unittest.TestCase):
             'assets/style.bak',
         ])
         self.assertEqual(result, [valid_file])
+
+    def test_get_accept_files_skips_checkout_directory(self):
+        """The store API rejects uploads to checkout/ (#37), so push never selects it."""
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as theme_dir:
+            os.chdir(theme_dir)
+            try:
+                os.makedirs('checkout')
+                os.makedirs('templates')
+                open('checkout/checkout.html', 'w').close()
+                open('templates/index.html', 'w').close()
+                self.assertEqual(self.command._get_accept_files([]), [os.path.abspath('templates/index.html')])
+                self.assertEqual(self.command._get_accept_files(['checkout/checkout.html']), [])
+            finally:
+                os.chdir(cwd)
 
     @patch("ntk.command.Command._get_accept_files", autospec=True)
     def test_push_command_with_filenames_should_upload_only_specified_files(
