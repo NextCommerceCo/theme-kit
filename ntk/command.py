@@ -109,6 +109,9 @@ class Command:
         if not isinstance(templates, list):
             return
 
+        # The store API rejects uploads to checkout/ (#37), so never write it locally either.
+        templates = [template for template in templates if not str(template['name']).startswith('checkout/')]
+
         template_count = len(templates)
         logging.info(f'[{self.config.env}] Connecting to {self.config.store}')
         logging.info(f'[{self.config.env}] Pulling {template_count} files from theme id {self.config.theme_id} ')

@@ -41,7 +41,6 @@ GLOB_PATTERN = [
     "assets/**/*.webm",
     "assets/**/*.mp3",
     "assets/**/*.pdf",
-    "checkout/**/*.html",
     "configs/**/*.json",
     "layouts/**/*.html",
     "partials/**/*.html",
