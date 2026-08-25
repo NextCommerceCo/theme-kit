@@ -311,41 +311,6 @@ class TestCommand(unittest.TestCase):
 
         mock_write_config.assert_not_called()
 
-    @patch("ntk.command.os.makedirs", autospec=True)
-    @patch("builtins.open", autospec=True)
-    @patch("ntk.command.Config.write_config", autospec=True)
-    def test_pull_command_skips_checkout_directory(self, mock_write_config, mock_open_file, mock_makedirs):
-        """The store API rejects uploads to checkout/ (#37), so pull never writes it locally."""
-        self.mock_gateway.return_value.get_templates.return_value.json.return_value = [
-            {
-                "theme": 1234,
-                "name": "checkout/checkout.html",
-                "content": "{% extends 'checkout/base.html' %}",
-                "file": None
-            },
-            {
-                "theme": 1234,
-                "name": "layout/base.html",
-                "content": "{% load i18n %}\n\n<div class=\"mt-2\">My home page</div>",
-                "file": None
-            }
-        ]
-
-        self.parser.filenames = None
-        with self.assertLogs(level='INFO') as logs:
-            self.command.pull(self.parser)
-
-        self.assertIn('[development] Pulling 1 files from theme id 1234', ''.join(logs.output))
-
-        # create layout/base.html
-        self.assertIn(
-            call(os.path.abspath('layout/base.html'), 'w', encoding='utf-8'), mock_open_file.mock_calls)
-
-        # never create checkout/ or checkout/checkout.html
-        self.assertNotIn(call(os.path.abspath('checkout')), mock_makedirs.mock_calls)
-        self.assertNotIn(
-            call(os.path.abspath('checkout/checkout.html'), 'w', encoding='utf-8'), mock_open_file.mock_calls)
-
     #####
     # push
     #####

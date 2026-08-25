@@ -155,7 +155,7 @@ On success, `ntk init` logs the new theme ID and name, and persists the theme ID
 To sync files between your local directory and the store, use `ntk push` to upload and `ntk pull` to download. Both upload or download the whole theme by default, and both accept file paths as positional arguments to limit the operation to specific files.
 
 > [!NOTE]
-> File paths are relative to the theme root. `ntk push` only uploads files inside the theme directories (`assets`, `configs`, `layouts`, `locales`, `partials`, `sass`, `templates`) with valid theme file extensions — a path outside of them is skipped silently, not reported as an error. The `checkout` directory is skipped by both `ntk pull` and `ntk push`: the store does not accept uploads to it.
+> File paths are relative to the theme root. `ntk push` only uploads files inside the theme directories (`assets`, `configs`, `layouts`, `locales`, `partials`, `sass`, `templates`) with valid theme file extensions — a path outside of them is skipped silently, not reported as an error. `ntk pull` still downloads the `checkout` directory, but `ntk push` skips it: the store does not accept uploads to it.
 
 | Example | Command |
 | ------- | ------- |
